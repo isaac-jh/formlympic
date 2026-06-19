@@ -47,8 +47,14 @@ const el = {
   log: $('log'),
 };
 
-/** 측정된 최소 편도 지연(추정) 보관 */
+/** 직전 ping 의 추정 편도 지연 */
 let lastEstimatedOneWay = null;
+/**
+ * 측정 세션 동안 관측된 "가장 작은" 추정 편도 지연.
+ * 안전한 발사(요청이 목표보다 일찍 도착해 거절되지 않도록)를 위해
+ * offset 적용 시 평균이 아니라 최솟값을 사용한다.
+ */
+let bestEstimatedOneWay = null;
 /** 주기 ping 인터벌 핸들 */
 let pingTimer = null;
 /** 카운트다운 인터벌 핸들 */
@@ -216,7 +222,9 @@ el.btnPingToggle.addEventListener('click', () => {
     return;
   }
   el.btnPingToggle.textContent = '측정 중지';
-  logLine('지연시간 주기 측정 시작 (1초 간격)');
+  // 새 측정 세션 시작 → 최소 편도값 초기화
+  bestEstimatedOneWay = null;
+  logLine('지연시간 주기 측정 시작 (1초 간격) — 측정 중 가장 작은 편도값을 offset 으로 사용');
   const tick = () => measureOnce(url);
   tick();
   pingTimer = setInterval(tick, 1000);
@@ -232,22 +240,33 @@ async function measureOnce(url) {
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || '실패');
+    lastEstimatedOneWay = d.estimatedOneWayMs;
+    // 세션 내 최솟값 갱신 (가장 빨랐던 편도값 = 가장 안전한 offset)
+    if (bestEstimatedOneWay == null || d.estimatedOneWayMs < bestEstimatedOneWay) {
+      bestEstimatedOneWay = d.estimatedOneWayMs;
+    }
     el.latMin.textContent = d.minRttMs + ' ms';
     el.latAvg.textContent = d.avgRttMs + ' ms';
-    el.latOneWay.textContent = d.estimatedOneWayMs + ' ms';
-    lastEstimatedOneWay = d.estimatedOneWayMs;
+    el.latOneWay.textContent =
+      d.estimatedOneWayMs + ' ms (최소 ' + bestEstimatedOneWay + ' ms)';
   } catch (err) {
     logLine('지연 측정 오류: ' + err.message, 'err');
   }
 }
 
 el.btnApplyOffset.addEventListener('click', () => {
-  if (lastEstimatedOneWay == null) {
+  if (bestEstimatedOneWay == null) {
     logLine('먼저 지연시간을 측정하세요.', 'warn');
     return;
   }
-  el.latencyOffset.value = Math.round(lastEstimatedOneWay);
-  logLine(`발사 offset 을 추정 편도값 ${el.latencyOffset.value}ms 로 적용`, 'ok');
+  // 안전 발사: 측정된 편도값 중 "가장 작았던 값"을 offset 으로 사용.
+  // → 실제 지연이 이보다 크면 요청이 목표 시각보다 살짝 늦게 도착(거절 회피),
+  //   작아질 일은 거의 없으므로 "너무 일찍 도착해 실패"하는 상황을 막는다.
+  el.latencyOffset.value = Math.round(bestEstimatedOneWay);
+  logLine(
+    `발사 offset 을 최소 편도값 ${el.latencyOffset.value}ms 로 적용 (직전 측정 ${Math.round(lastEstimatedOneWay)}ms)`,
+    'ok',
+  );
 });
 
 // --------------------------------------------------------------------------

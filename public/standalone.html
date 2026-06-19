@@ -190,6 +190,8 @@
       /** 지연시간 통계 */
       let rtts = [];
       let pingTimer = null;
+      // 측정 세션 전체에서 관측된 "가장 작은" 편도값(ms). 안전 발사용 offset.
+      let bestOneWay = null;
       /** 로컬시계 → 서버(참)시간 보정값 (ms). serverNow() = Date.now() + clockOffset */
       let clockOffset = 0;
       let autoSyncTimer = null;
@@ -338,6 +340,7 @@
         if (!url) { errlog('먼저 cURL을 파싱하세요(측정 대상 URL 필요).'); return; }
         $('btnPing').textContent = '측정 중지';
         rtts = [];
+        bestOneWay = null; // 새 측정 세션 → 최소 편도값 초기화
         log('지연 측정 시작: ' + url);
         const tick = async () => {
           const start = performance.now();
@@ -347,6 +350,9 @@
           const rtt = performance.now() - start;
           rtts.push(rtt);
           if (rtts.length > 30) rtts.shift();
+          const oneWay = rtt / 2;
+          // 롤링 버퍼와 무관하게 세션 전체의 "가장 작은" 편도값을 보존
+          if (bestOneWay == null || oneWay < bestOneWay) bestOneWay = oneWay;
           const min = Math.min(...rtts);
           const avg = rtts.reduce((a, b) => a + b, 0) / rtts.length;
           $('rttMin').textContent = min.toFixed(1) + ' ms';
@@ -358,10 +364,12 @@
       });
 
       $('btnApplyOffset').addEventListener('click', () => {
-        if (!rtts.length) { errlog('먼저 지연시간을 측정하세요.'); return; }
-        const oneWay = Math.round(Math.min(...rtts) / 2);
+        if (bestOneWay == null) { errlog('먼저 지연시간을 측정하세요.'); return; }
+        // 안전 발사: 측정된 편도값 중 가장 작았던 값을 offset 으로 사용
+        // (실제 지연이 더 크면 목표보다 살짝 늦게 도착 → 거절 회피)
+        const oneWay = Math.round(bestOneWay);
         $('offset').value = oneWay;
-        log(`발사 offset을 추정 편도값 ${oneWay}ms로 적용`, 'ok');
+        log(`발사 offset을 최소 편도값 ${oneWay}ms로 적용`, 'ok');
       });
 
       // -------------------- (3) 시간 동기화 (Cristian) --------------------
