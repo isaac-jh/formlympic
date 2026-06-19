@@ -1,6 +1,6 @@
 # PRD: Formlympic - Google Form 선착순 자동 제출기
 
-- **버전**: v0.3.0
+- **버전**: v0.3.1
 - **최종 수정일**: 2026-06-19
 - **상태**: 초안(Draft)
 
@@ -38,6 +38,7 @@
 | FR-9 | 로그인 필수 폼 대응: 사용자 **Cookie 헤더 passthrough** (viewform/ping/formResponse 모두) + Referer/Origin 자동 설정 |
 | FR-10 | 브라우저 제출 페이로드와 동일하게 `partialResponse` 자동 주입, 객관식 `_sentinel` 은 템플릿으로 추가 가능 |
 | FR-11 | **프론트 전용 모드**(`public/standalone.html`, 서버 불필요): cURL 붙여넣기→파싱, no-cors RTT 측정, 시간 API 기반 시계 동기화(Cristian), 숨긴 form을 새 창에 POST 제출(쿠키 자동·응답 표시), 요청/에러 로그 분리 |
+| FR-12 | 제출 페이로드에서 **`hud` 필드 자동 제거**(서버/프론트 공통): `hud=true` 포함 시 Google이 400으로 제출을 거부함(실측 확인) |
 
 ## 4. 비기능 요구사항 (Non-Functional)
 
@@ -63,3 +64,4 @@
 | v0.1.0 | 2026-06-19 | 최초 작성: 선착순 자동 제출 웹앱 요구사항 정의 |
 | v0.2.0 | 2026-06-19 | 실제 폼 테스트 결과 반영: 로그인 필수 폼 대응(Cookie passthrough, FR-9), `partialResponse` 자동 주입(FR-10) 추가 |
 | v0.3.0 | 2026-06-19 | 서버 없이 동작하는 프론트 전용 단일 HTML(`standalone.html`) 추가(FR-11): CORS 제약을 form-submit 방식으로 우회 |
+| v0.3.1 | 2026-06-19 | 실제 시트 기록 성공 검증("응답이 기록되었습니다"). `hud=true`가 제출을 400으로 막는 것을 실측 확인 → `hud` 자동 제거(FR-12) |

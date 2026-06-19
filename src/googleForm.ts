@@ -137,6 +137,8 @@ export function buildPayload(
 
   // (a) 사용자 데이터: 배열이면 복수 append (체크박스 다중 선택 대응)
   for (const [key, value] of Object.entries(template)) {
+    // hud=true 는 미리보기/비기록 모드를 유발해 제출이 400으로 거부되므로 제외
+    if (key === 'hud') continue;
     if (Array.isArray(value)) {
       for (const v of value) params.append(key, v);
     } else {

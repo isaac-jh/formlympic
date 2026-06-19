@@ -302,9 +302,12 @@
         try {
           const p = parseCurl($('respCurl').value);
           if (!p.url) throw new Error('URL을 찾지 못했습니다.');
-          target = { url: p.url, method: p.method, body: p.body };
-          $('bodyEdit').value = p.body;
           const params = new URLSearchParams(p.body);
+          // hud=true 는 미리보기/비기록 모드를 유발해 제출이 400으로 거부됨 → 제거
+          if (params.has('hud')) { params.delete('hud'); log('⚠️ 본문에서 hud 제거(제출 거부 유발 필드)', 'warn'); }
+          const cleanBody = params.toString();
+          target = { url: p.url, method: p.method, body: cleanBody };
+          $('bodyEdit').value = cleanBody;
           const entries = [...params.keys()].filter((k) => k.startsWith('entry.'));
           const fbzx = params.get('fbzx');
           $('respParsed').textContent = `${p.method} · entry ${entries.length}개 · fbzx ${fbzx ? '있음' : '없음'}`;
@@ -441,6 +444,8 @@
         const now = serverNow();
         if (params.has('submissionTimestamp')) params.set('submissionTimestamp', String(now));
         if (params.has('dlut')) params.set('dlut', String(now));
+        // 방어적 제거: hud=true 가 남아 있으면 제출이 400으로 거부됨
+        params.delete('hud');
 
         const form = document.createElement('form');
         form.method = (target.method || 'POST').toUpperCase();
