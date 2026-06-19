@@ -38,6 +38,8 @@ export interface ScheduleConfig {
   payloadTemplate: PayloadTemplate;
   /** 로그인 세션 Cookie (선택) */
   cookie?: string;
+  /** 실패 시 리바운드(재시도) 최대 횟수 (선택, 기본 DEFAULT_MAX_RETRIES) */
+  maxRetries?: number;
 }
 
 /** fbzx 추출 + 폼 메타 정보 결과. */
@@ -80,6 +82,14 @@ export type ScheduleEvent =
   | {type: 'token'; fbzx: string | null; at: number}
   | {type: 'payload'; preview: string; at: number}
   | {type: 'fired'; at: number}
-  | {type: 'response'; status: number; finalUrl: string; htmlBase64: string}
+  | {type: 'retry'; attempt: number; max: number; reason: string; at: number}
+  | {
+      type: 'response';
+      status: number;
+      finalUrl: string;
+      htmlBase64: string;
+      recorded: boolean;
+      attempts: number;
+    }
   | {type: 'error'; message: string}
   | {type: 'done'};

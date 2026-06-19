@@ -50,14 +50,15 @@ export async function inspectForm(
   viewFormUrl: string,
   opts?: RequestAuthOptions,
 ): Promise<InspectResult> {
-  const {data: html} = await axios.get<string>(viewFormUrl, {
+  // arraybuffer 로 원시 바이트를 받아 명시적으로 UTF-8 디코딩한다.
+  // (responseType:'text' 는 axios 의 charset 추정으로 한글이 깨질 수 있음)
+  const {data} = await axios.get<ArrayBuffer>(viewFormUrl, {
     headers: withAuthHeaders(opts),
-    responseType: 'text',
-    // 구글 폼은 가끔 큰 HTML 을 반환하므로 변환 방지
-    transformResponse: [(d) => d],
+    responseType: 'arraybuffer',
     timeout: 10_000,
   });
 
+  const html = Buffer.from(data).toString('utf8');
   return extractTokens(html);
 }
 
@@ -208,13 +209,13 @@ export async function submitForm(
   opts?: RequestAuthOptions,
 ): Promise<SubmitResult> {
   const firedAt = Date.now();
-  const response = await axios.post<string>(formResponseUrl, payloadBody, {
+  const response = await axios.post<ArrayBuffer>(formResponseUrl, payloadBody, {
     headers: {
       ...withAuthHeaders(opts),
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    responseType: 'text',
-    transformResponse: [(d) => d],
+    // 원시 바이트로 받아 UTF-8 로 명시적 디코딩 (한글 깨짐 방지)
+    responseType: 'arraybuffer',
     // 성공/실패 페이지 모두 받아서 사용자에게 보여주기 위해 모든 상태 허용
     validateStatus: () => true,
     maxRedirects: 5,
@@ -230,7 +231,7 @@ export async function submitForm(
   return {
     status: response.status,
     finalUrl,
-    html: typeof response.data === 'string' ? response.data : String(response.data),
+    html: Buffer.from(response.data).toString('utf8'),
     firedAt,
   };
 }
@@ -287,4 +288,27 @@ export async function measureLatency(
 /** 소수점 1자리 반올림 헬퍼. */
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * 제출 응답이 "정상 기록"인지 판정한다. (재시도 여부 판단용)
+ *
+ *  성공 시그널(실측 기준):
+ *   - 확인 페이지 노드 `FormviewerViewResponseConfirmation`
+ *   - 텍스트 "응답이 기록되었습니다" / "Your response has been recorded"
+ *  실패 시그널:
+ *   - HTTP 400 등 오류 상태
+ *   - 폼이 다시 렌더된 경우(확인 시그널 없음) · 로그인 페이지로 유도된 경우
+ *
+ *  @param result submitForm 결과
+ *  @returns 기록 성공 여부
+ */
+export function isSubmissionRecorded(result: SubmitResult): boolean {
+  if (result.status >= 400) return false;
+  const h = result.html;
+  return (
+    /FormviewerViewResponseConfirmation/.test(h) ||
+    h.includes('응답이 기록되었습니다') ||
+    /your response has been recorded/i.test(h)
+  );
 }

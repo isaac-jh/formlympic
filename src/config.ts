@@ -62,6 +62,19 @@ export const DEFAULT_LATENCY_OFFSET_MS = 50;
 export const TOKEN_PREFETCH_LEAD_MS = 2500;
 
 /**
+ * (5-1) 예약 발사 실패 시 리바운드(재시도) 최대 횟수
+ *  - 제출 응답이 "정상 기록"이 아니면(폼 재렌더/400/로그인유도 등) fbzx 를 새로 받아 재시도.
+ *  - 기본 3회. 0 이면 재시도하지 않음.
+ */
+export const DEFAULT_MAX_RETRIES = 3;
+
+/**
+ * (5-2) 리바운드 재시도 간 지연 (ms)
+ *  - 너무 빠른 연속 요청을 피하고 fbzx 가 안정적으로 발급되도록 약간 대기.
+ */
+export const RETRY_DELAY_MS = 150;
+
+/**
  * (6) 정밀 대기(Busy-wait) 전환 마진 (ms)
  *  - 발사 시점 직전 이 시간만큼은 setTimeout 대신 while-loop 로 정밀 대기.
  *  - 너무 크면 CPU 점유, 너무 작으면 정밀도 저하. 기본 30ms.

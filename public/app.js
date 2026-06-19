@@ -40,6 +40,7 @@ const el = {
   targetDateTime: $('targetDateTime'),
   targetMs: $('targetMs'),
   latencyOffset: $('latencyOffset'),
+  maxRetries: $('maxRetries'),
   countdown: $('countdown'),
   btnSchedule: $('btnSchedule'),
   btnQuick: $('btnQuick'),
@@ -82,6 +83,7 @@ async function loadDefaults() {
     el.formResponseUrl.value = d.formResponseUrl;
     el.payloadTemplate.value = JSON.stringify(d.payloadTemplate, null, 2);
     el.latencyOffset.value = d.latencyOffsetMs;
+    if (typeof d.maxRetries === 'number') el.maxRetries.value = d.maxRetries;
     if (d.cookie) el.cookie.value = d.cookie;
     // 목표 시간 기본값: 오늘 + 기본 HH:mm:ss
     presetTargetTime(d.targetHhmmss);
@@ -290,6 +292,7 @@ el.btnSchedule.addEventListener('click', async () => {
         latencyOffsetMs,
         payloadTemplate,
         cookie: getCookie(),
+        maxRetries: Number(el.maxRetries.value) || 0,
       }),
     });
     await consumeNdjson(res, handleScheduleEvent);
@@ -316,8 +319,14 @@ function handleScheduleEvent(evt) {
     case 'fired':
       logLine('🚀 발사 시각 기록됨', 'ok');
       break;
+    case 'retry':
+      logLine(`⟳ 리바운드 재시도 ${evt.attempt}/${evt.max} (사유: ${evt.reason})`, 'warn');
+      break;
     case 'response':
-      logLine(`응답 수신: HTTP ${evt.status}`, 'ok');
+      logLine(
+        `응답 수신: HTTP ${evt.status} / 기록 ${evt.recorded ? '성공 ✅' : '실패 ❌'} (총 ${evt.attempts}회 시도)`,
+        evt.recorded ? 'ok' : 'err',
+      );
       openResponseWindow(evt.htmlBase64, evt.finalUrl);
       break;
     case 'error':

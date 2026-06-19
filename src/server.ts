@@ -19,17 +19,21 @@ import {
   DEFAULT_COOKIE,
   DEFAULT_FORM_RESPONSE_URL,
   DEFAULT_LATENCY_OFFSET_MS,
+  DEFAULT_MAX_RETRIES,
   DEFAULT_PAYLOAD_TEMPLATE,
   DEFAULT_TARGET_HHMMSS,
   DEFAULT_VIEW_FORM_URL,
+  RETRY_DELAY_MS,
   SERVER_PORT,
   TOKEN_PREFETCH_LEAD_MS,
 } from './config.js';
 import {
   buildPayload,
   inspectForm,
+  isSubmissionRecorded,
   measureLatency,
   preciseWaitUntil,
+  sleep,
   submitForm,
 } from './googleForm.js';
 import type {ScheduleConfig, ScheduleEvent} from './types.js';
@@ -53,6 +57,7 @@ app.get('/api/defaults', (_req: Request, res: Response) => {
     targetHhmmss: DEFAULT_TARGET_HHMMSS,
     latencyOffsetMs: DEFAULT_LATENCY_OFFSET_MS,
     cookie: DEFAULT_COOKIE,
+    maxRetries: DEFAULT_MAX_RETRIES,
   });
 });
 
@@ -164,6 +169,7 @@ app.post('/api/schedule', async (req: Request, res: Response) => {
   }
 
   const latencyOffsetMs = cfg.latencyOffsetMs ?? DEFAULT_LATENCY_OFFSET_MS;
+  const maxRetries = cfg.maxRetries ?? DEFAULT_MAX_RETRIES;
 
   // NDJSON 스트리밍 헤더 설정
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -216,18 +222,47 @@ app.post('/api/schedule', async (req: Request, res: Response) => {
     emit({type: 'fired', at: firedAt});
     log(`🚀 발사! 실제 발사 시각=${fmt(firedAt)} (목표와 오차 ${firedAt - targetTime}ms)`);
 
-    // (5) 제출 및 응답 반환
-    const result = await submitForm(cfg.formResponseUrl, body, {
+    // (5) 제출 및 응답 반환 (실패 시 리바운드 재시도)
+    const submitOpts = {
       cookie: cfg.cookie,
       referer: cfg.viewFormUrl,
       origin: originOf(cfg.formResponseUrl),
-    });
-    log(`응답 수신: HTTP ${result.status} / finalUrl=${result.finalUrl}`);
+    };
+    let result = await submitForm(cfg.formResponseUrl, body, submitOpts);
+    let recorded = isSubmissionRecorded(result);
+    let attempts = 1;
+    log(
+      `응답 수신: HTTP ${result.status} / 기록=${recorded ? '성공' : '실패'} / finalUrl=${result.finalUrl}`,
+    );
+
+    // (6) 실패 시 fbzx 를 새로 받아 최대 maxRetries 회 재시도
+    while (!recorded && attempts <= maxRetries) {
+      const reason = `HTTP ${result.status} · 확인페이지 아님`;
+      emit({type: 'retry', attempt: attempts, max: maxRetries, reason, at: Date.now()});
+      log(`⟳ 리바운드 재시도 ${attempts}/${maxRetries} (사유: ${reason}) — fbzx 재수급`);
+
+      await sleep(RETRY_DELAY_MS);
+      const reInspect = await inspectForm(cfg.viewFormUrl, {cookie: cfg.cookie});
+      const reBody = buildPayload(cfg.payloadTemplate, reInspect.fbzx);
+      result = await submitForm(cfg.formResponseUrl, reBody, submitOpts);
+      recorded = isSubmissionRecorded(result);
+      attempts++;
+      log(`  재시도 결과: HTTP ${result.status} / 기록=${recorded ? '성공' : '실패'}`);
+    }
+
+    if (recorded) {
+      log(`✅ 최종 기록 성공 (총 ${attempts}회 시도)`);
+    } else {
+      log(`❌ 최종 기록 실패 (총 ${attempts}회 시도, 재시도 한도 소진)`);
+    }
+
     emit({
       type: 'response',
       status: result.status,
       finalUrl: result.finalUrl,
       htmlBase64: Buffer.from(result.html, 'utf8').toString('base64'),
+      recorded,
+      attempts,
     });
     emit({type: 'done'});
   } catch (err) {
