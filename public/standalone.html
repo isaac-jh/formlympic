@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Formlympic Lite · 프론트 전용 폼 발사기</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --card: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #2f81f7;
+        --ok: #238636;
+        --warn: #d29922;
+        --danger: #f85149;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+        line-height: 1.5;
+      }
+      header { padding: 20px 24px 6px; }
+      header h1 { margin: 0; font-size: 22px; }
+      header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+        padding: 14px 24px 40px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 18px;
+      }
+      .wide { grid-column: 1 / -1; }
+      .card h2 { margin: 0 0 12px; font-size: 15px; }
+      label { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 4px; }
+      input, textarea {
+        width: 100%;
+        background: #0d1117;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 8px 10px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      textarea { font-family: 'SF Mono', ui-monospace, Menlo, monospace; resize: vertical; }
+      input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+      .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 6px 0; }
+      .row input[type='text'], .row input[type='datetime-local'] { flex: 1; min-width: 140px; }
+      .btn {
+        background: #21262d; border: 1px solid var(--border); color: var(--text);
+        border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+      }
+      .btn:hover { filter: brightness(1.25); }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn-primary { background: var(--accent); border-color: var(--accent); }
+      .btn-ok { background: var(--ok); border-color: var(--ok); }
+      .btn-warn { background: var(--warn); border-color: var(--warn); color: #1a1300; }
+      .hint { color: var(--muted); font-size: 12px; margin-top: 6px; white-space: pre-wrap; }
+      code { background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+      .metrics { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+      .metric { flex: 1; min-width: 90px; background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 8px; text-align: center; }
+      .metric .l { display: block; font-size: 11px; color: var(--muted); }
+      .metric .v { display: block; font-size: 17px; font-weight: 600; margin-top: 2px; }
+      .countdown { font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: 20px; color: var(--accent); margin-left: auto; }
+      .logwrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .log {
+        background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+        height: 240px; overflow-y: auto; font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+        font-size: 12px; white-space: pre-wrap; margin: 0;
+      }
+      .log .ts { color: var(--muted); }
+      .log .ok { color: #3fb950; }
+      .log .warn { color: var(--warn); }
+      .log .err { color: var(--danger); }
+      .badge { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); }
+      @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } .logwrap { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🏁 Formlympic Lite <span class="badge">프론트 전용 · 서버 불필요</span></h1>
+      <p>cURL 붙여넣기 → 시간 동기화 → 정밀 발사(숨긴 form을 새 창에 POST). 응답 HTML은 새 창에 그대로 표시됩니다.</p>
+    </header>
+
+    <main class="grid">
+      <!-- (1) cURL 입력 -->
+      <section class="card wide">
+        <h2>① cURL 입력</h2>
+        <div class="logwrap">
+          <div>
+            <label>viewForm cURL (지연시간 측정용 · 선택)</label>
+            <textarea id="viewCurl" rows="5" spellcheck="false" placeholder="크롬 개발자도구 → viewform 요청 우클릭 → Copy as cURL (bash)"></textarea>
+            <div class="row"><button id="btnParseView" class="btn">파싱</button><span id="viewParsed" class="hint"></span></div>
+          </div>
+          <div>
+            <label>formResponse cURL (실제 발사용 · 필수)</label>
+            <textarea id="respCurl" rows="5" spellcheck="false" placeholder="크롬 개발자도구 → formResponse 요청 우클릭 → Copy as cURL (bash)"></textarea>
+            <div class="row"><button id="btnParseResp" class="btn">파싱</button><span id="respParsed" class="hint"></span></div>
+          </div>
+        </div>
+        <label>전송 본문(파싱 결과 · 편집 가능) — <code>submissionTimestamp</code>/<code>dlut</code>는 발사 시 자동 갱신</label>
+        <textarea id="bodyEdit" rows="4" spellcheck="false" placeholder="formResponse cURL을 파싱하면 여기에 entry.* 와 fbzx 등이 채워집니다."></textarea>
+      </section>
+
+      <!-- (2) 지연시간 -->
+      <section class="card">
+        <h2>② 서버 지연시간 (RTT)</h2>
+        <div class="row">
+          <button id="btnPing" class="btn">주기 측정 시작</button>
+          <span class="hint">no-cors 왕복 시간 기준 (1초)</span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span class="l">최소 RTT</span><span id="rttMin" class="v">-</span></div>
+          <div class="metric"><span class="l">평균 RTT</span><span id="rttAvg" class="v">-</span></div>
+          <div class="metric"><span class="l">최근 RTT</span><span id="rttLast" class="v">-</span></div>
+        </div>
+        <button id="btnApplyOffset" class="btn">추정 편도(min/2)를 발사 offset으로 적용</button>
+      </section>
+
+      <!-- (3) 시간 동기화 -->
+      <section class="card">
+        <h2>③ 서버시간 동기화</h2>
+        <label>시간 API URL (CORS 허용 · UTC 반환)</label>
+        <input id="timeUrl" type="text" value="https://timeapi.io/api/time/current/zone?timeZone=UTC" />
+        <div class="row">
+          <button id="btnSync" class="btn">동기화</button>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;color:var(--text)">
+            <input id="autoSync" type="checkbox" style="width:auto" /> 자동(30s)
+          </label>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span class="l">시계 보정(drift)</span><span id="clockOffset" class="v">0 ms</span></div>
+          <div class="metric"><span class="l">동기화 RTT</span><span id="syncRtt" class="v">-</span></div>
+        </div>
+        <div class="hint" id="serverNowView">로컬 시계 사용 중</div>
+      </section>
+
+      <!-- (4) 발사 -->
+      <section class="card wide">
+        <h2>④ 목표 시간 & 정밀 발사</h2>
+        <div class="row">
+          <label class="" style="flex:1">목표 날짜·시각<input id="targetDateTime" type="datetime-local" step="1" /></label>
+          <label style="width:90px">ms<input id="targetMs" type="number" min="0" max="999" value="0" /></label>
+          <label style="width:130px">발사 offset(ms)<input id="offset" type="number" min="0" value="50" /></label>
+          <button id="btnQuick" class="btn">+10초</button>
+          <span id="countdown" class="countdown">--</span>
+        </div>
+        <div class="row">
+          <button id="btnArm" class="btn btn-primary">🚀 예약 발사(새 창 준비 + 대기)</button>
+          <button id="btnCancel" class="btn" disabled>취소</button>
+          <button id="btnFireNow" class="btn btn-warn">즉시 발사(테스트)</button>
+        </div>
+        <div class="hint">⚠️ 팝업 차단 시 발사 새 창이 안 열립니다. 이 페이지의 팝업을 허용하세요. 같은 브라우저에서 Google 로그인 상태면 쿠키는 자동 전송됩니다.</div>
+      </section>
+
+      <!-- (5) 로그 -->
+      <section class="card wide">
+        <h2>⑤ 로그</h2>
+        <div class="logwrap">
+          <div><label>요청/이벤트 로그</label><pre id="reqLog" class="log"></pre></div>
+          <div><label>에러 로그</label><pre id="errLog" class="log"></pre></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      'use strict';
+
+      // ====================================================================
+      //  Formlympic Lite — 프론트 전용 로직 (서버 없음)
+      //  - cURL 파싱 → 정밀 시점에 숨긴 form 을 새 창에 POST 제출
+      //  - CORS 때문에 응답/Date 헤더를 직접 읽을 수 없으므로 form-submit 방식 사용
+      // ====================================================================
+
+      const $ = (id) => document.getElementById(id);
+
+      /** 파싱된 발사 대상 (formResponse). */
+      let target = { url: null, method: 'POST', body: '' };
+      /** 지연시간 통계 */
+      let rtts = [];
+      let pingTimer = null;
+      /** 로컬시계 → 서버(참)시간 보정값 (ms). serverNow() = Date.now() + clockOffset */
+      let clockOffset = 0;
+      let autoSyncTimer = null;
+      let countdownTimer = null;
+      let fireTimer = null;
+      /** 예약 시 미리 열어두는 응답 창 (팝업 차단 회피용) */
+      let responseWindow = null;
+
+      // -------------------- 로그 --------------------
+
+      function stamp() {
+        const d = new Date();
+        const p = (n, l = 2) => String(n).padStart(l, '0');
+        return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+      }
+      function logTo(pre, msg, level) {
+        const line = document.createElement('div');
+        const span = document.createElement('span');
+        span.className = level || '';
+        span.textContent = msg;
+        line.innerHTML = `<span class="ts">[${stamp()}]</span> `;
+        line.appendChild(span);
+        pre.appendChild(line);
+        pre.scrollTop = pre.scrollHeight;
+      }
+      const log = (m, lv) => logTo($('reqLog'), m, lv);
+      const errlog = (m) => { logTo($('errLog'), m, 'err'); };
+
+      // -------------------- 보정 시계 --------------------
+
+      /** 서버(참) 시간 추정값. 동기화 전에는 로컬 시계와 동일. */
+      function serverNow() { return Date.now() + clockOffset; }
+
+      // -------------------- cURL 파서 --------------------
+
+      /**
+       * 셸 토크나이저. 작은따옴표/큰따옴표/백슬래시/줄바꿈(\) 연속을 처리.
+       * 크롬 "Copy as cURL (bash)"의 '\'' (이스케이프된 작은따옴표)도 처리됨.
+       */
+      function tokenizeCurl(s) {
+        s = s.replace(/\\\r?\n/g, ' ');
+        const tokens = [];
+        let i = 0;
+        const n = s.length;
+        while (i < n) {
+          while (i < n && /\s/.test(s[i])) i++;
+          if (i >= n) break;
+          let tok = '';
+          while (i < n && !/\s/.test(s[i])) {
+            const c = s[i];
+            if (c === "'") {
+              i++;
+              while (i < n && s[i] !== "'") { tok += s[i]; i++; }
+              i++;
+            } else if (c === '"') {
+              i++;
+              while (i < n && s[i] !== '"') {
+                if (s[i] === '\\' && i + 1 < n) { tok += s[i + 1]; i += 2; }
+                else { tok += s[i]; i++; }
+              }
+              i++;
+            } else if (c === '\\') {
+              if (i + 1 < n) { tok += s[i + 1]; i += 2; } else i++;
+            } else { tok += c; i++; }
+          }
+          tokens.push(tok);
+        }
+        return tokens;
+      }
+
+      /** cURL 문자열을 {url, method, body, headers} 로 파싱. */
+      function parseCurl(text) {
+        const t = tokenizeCurl(text);
+        let url = null;
+        let method = null;
+        const data = [];
+        const headers = {};
+        const dataFlags = ['--data-raw', '--data', '-d', '--data-binary', '--data-ascii', '--data-urlencode'];
+        for (let i = 0; i < t.length; i++) {
+          const a = t[i];
+          if (a === 'curl') continue;
+          if (a === '-X' || a === '--request') { method = t[++i]; }
+          else if (a === '-H' || a === '--header') {
+            const h = t[++i] || '';
+            const idx = h.indexOf(':');
+            if (idx > 0) headers[h.slice(0, idx).trim().toLowerCase()] = h.slice(idx + 1).trim();
+          } else if (a === '-b' || a === '--cookie') { i++; /* 쿠키는 브라우저가 자동 전송하므로 무시 */ }
+          else if (dataFlags.includes(a)) { data.push(t[++i]); }
+          else if (/^https?:\/\//.test(a) && !url) { url = a; }
+          else if (!a.startsWith('-') && !url) { url = a; }
+          // 그 외 플래그(-s, --compressed 등)는 무시
+        }
+        const body = data.join('&');
+        if (!method) method = body ? 'POST' : 'GET';
+        return { url, method, body, headers };
+      }
+
+      // -------------------- (1) 파싱 버튼 --------------------
+
+      $('btnParseView').addEventListener('click', () => {
+        try {
+          const p = parseCurl($('viewCurl').value);
+          if (!p.url) throw new Error('URL을 찾지 못했습니다.');
+          $('viewParsed').textContent = `URL 확인 (지연측정 대상): ${p.url}`;
+          log('viewForm cURL 파싱 완료: ' + p.url, 'ok');
+        } catch (e) { errlog('viewForm 파싱 오류: ' + e.message); }
+      });
+
+      $('btnParseResp').addEventListener('click', () => {
+        try {
+          const p = parseCurl($('respCurl').value);
+          if (!p.url) throw new Error('URL을 찾지 못했습니다.');
+          target = { url: p.url, method: p.method, body: p.body };
+          $('bodyEdit').value = p.body;
+          const params = new URLSearchParams(p.body);
+          const entries = [...params.keys()].filter((k) => k.startsWith('entry.'));
+          const fbzx = params.get('fbzx');
+          $('respParsed').textContent = `${p.method} · entry ${entries.length}개 · fbzx ${fbzx ? '있음' : '없음'}`;
+          log(`formResponse 파싱 완료: ${p.method} ${p.url}`, 'ok');
+          log(`필드: ${entries.join(', ')} / fbzx=${fbzx || '없음'}`);
+          if (!fbzx) log('⚠️ fbzx가 본문에 없습니다. 이벤트 직전에 cURL을 새로 복사하세요.', 'warn');
+        } catch (e) { errlog('formResponse 파싱 오류: ' + e.message); }
+      });
+
+      // -------------------- (2) 지연시간 (RTT) --------------------
+
+      /** 지연측정 대상 URL: viewForm 우선, 없으면 formResponse. */
+      function pingUrl() {
+        const v = parseCurlSafe($('viewCurl').value);
+        if (v && v.url) return v.url;
+        return target.url;
+      }
+      function parseCurlSafe(text) { try { return parseCurl(text); } catch { return null; } }
+
+      $('btnPing').addEventListener('click', () => {
+        if (pingTimer) {
+          clearInterval(pingTimer); pingTimer = null;
+          $('btnPing').textContent = '주기 측정 시작';
+          log('지연 측정 중지');
+          return;
+        }
+        const url = pingUrl();
+        if (!url) { errlog('먼저 cURL을 파싱하세요(측정 대상 URL 필요).'); return; }
+        $('btnPing').textContent = '측정 중지';
+        rtts = [];
+        log('지연 측정 시작: ' + url);
+        const tick = async () => {
+          const start = performance.now();
+          try {
+            await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+          } catch (e) { errlog('ping 실패: ' + e.message); return; }
+          const rtt = performance.now() - start;
+          rtts.push(rtt);
+          if (rtts.length > 30) rtts.shift();
+          const min = Math.min(...rtts);
+          const avg = rtts.reduce((a, b) => a + b, 0) / rtts.length;
+          $('rttMin').textContent = min.toFixed(1) + ' ms';
+          $('rttAvg').textContent = avg.toFixed(1) + ' ms';
+          $('rttLast').textContent = rtt.toFixed(1) + ' ms';
+        };
+        tick();
+        pingTimer = setInterval(tick, 1000);
+      });
+
+      $('btnApplyOffset').addEventListener('click', () => {
+        if (!rtts.length) { errlog('먼저 지연시간을 측정하세요.'); return; }
+        const oneWay = Math.round(Math.min(...rtts) / 2);
+        $('offset').value = oneWay;
+        log(`발사 offset을 추정 편도값 ${oneWay}ms로 적용`, 'ok');
+      });
+
+      // -------------------- (3) 시간 동기화 (Cristian) --------------------
+
+      async function syncClock() {
+        const url = $('timeUrl').value.trim();
+        if (!url) { errlog('시간 API URL을 입력하세요.'); return; }
+        const t0 = Date.now();
+        let data;
+        try {
+          const res = await fetch(url, { cache: 'no-store' });
+          data = await res.json();
+        } catch (e) { errlog('시간 동기화 실패(로컬 시계 유지): ' + e.message); return; }
+        const t1 = Date.now();
+        const rtt = t1 - t0;
+        // 다양한 시간 API 응답 형식 지원
+        let iso = data.utc_datetime || data.dateTime || data.datetime || data.currentDateTime;
+        let serverMs = NaN;
+        if (iso) {
+          // 타임존 표기(Z 또는 ±hh:mm)가 없으면 UTC 로 간주하고 'Z' 부여
+          // (timeapi.io 의 dateTime 은 UTC 인데 오프셋 표기가 없어 로컬시간으로 오인되는 문제 방지)
+          if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso)) iso += 'Z';
+          serverMs = Date.parse(iso);
+        } else if (typeof data.unixtime === 'number') {
+          serverMs = data.unixtime * 1000;
+        }
+        if (isNaN(serverMs)) { errlog('시간 응답을 해석하지 못했습니다.'); return; }
+        // Cristian: 서버 현재시각 ≈ serverMs + rtt/2
+        const estServerNow = serverMs + rtt / 2;
+        clockOffset = Math.round(estServerNow - t1);
+        $('clockOffset').textContent = clockOffset + ' ms';
+        $('syncRtt').textContent = rtt + ' ms';
+        log(`시간 동기화 완료: drift ${clockOffset}ms (RTT ${rtt}ms)`, 'ok');
+      }
+
+      $('btnSync').addEventListener('click', syncClock);
+      $('autoSync').addEventListener('change', (e) => {
+        if (e.target.checked) { syncClock(); autoSyncTimer = setInterval(syncClock, 30000); }
+        else if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
+      });
+
+      // 보정된 서버시간 표시
+      setInterval(() => {
+        const d = new Date(serverNow());
+        const p = (n, l = 2) => String(n).padStart(l, '0');
+        $('serverNowView').textContent =
+          `추정 서버시간: ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}` +
+          (clockOffset ? ` (보정 ${clockOffset > 0 ? '+' : ''}${clockOffset}ms)` : ' (로컬 시계)');
+      }, 100);
+
+      // -------------------- (4) 목표시간 / 발사 --------------------
+
+      function toDatetimeLocal(d) {
+        const p = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+      }
+      // 기본 목표시간: 현재+1분
+      $('targetDateTime').value = toDatetimeLocal(new Date(Date.now() + 60000));
+
+      $('btnQuick').addEventListener('click', () => {
+        const t = new Date(Date.now() + 10000);
+        $('targetDateTime').value = toDatetimeLocal(t);
+        $('targetMs').value = t.getMilliseconds();
+      });
+
+      /** 목표 시각(서버시간 기준 epoch ms). 보정값을 빼서 "발사를 판단할 로컬 비교용"으로 변환. */
+      function targetServerEpoch() {
+        if (!$('targetDateTime').value) return null;
+        const base = new Date($('targetDateTime').value).getTime();
+        return base + (Number($('targetMs').value) || 0);
+      }
+
+      /**
+       * 실제 발사 수행: 본문 타임스탬프 갱신 → 숨긴 form 을 응답 창에 POST 제출.
+       *  - 새 창은 예약 시 미리 열어둔 responseWindow 를 재사용(팝업 차단 회피).
+       */
+      function fire() {
+        if (!target.url) { errlog('formResponse가 파싱되지 않았습니다.'); return; }
+        const params = new URLSearchParams($('bodyEdit').value || target.body);
+        const now = serverNow();
+        if (params.has('submissionTimestamp')) params.set('submissionTimestamp', String(now));
+        if (params.has('dlut')) params.set('dlut', String(now));
+
+        const form = document.createElement('form');
+        form.method = (target.method || 'POST').toUpperCase();
+        form.action = target.url;
+        form.target = 'formlympicResponse';
+        form.acceptCharset = 'UTF-8';
+        for (const [k, v] of params) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = k;
+          input.value = v;
+          form.appendChild(input);
+        }
+        // 새 창 확보 (없으면 새로 열기 시도)
+        if (!responseWindow || responseWindow.closed) {
+          responseWindow = window.open('', 'formlympicResponse');
+        }
+        if (!responseWindow) {
+          errlog('팝업이 차단되어 새 창을 열 수 없습니다. 즉시 발사 버튼으로 다시 시도하세요.');
+        }
+        document.body.appendChild(form);
+        const sentAt = serverNow();
+        form.submit();
+        form.remove();
+        const tgt = targetServerEpoch();
+        log(`🚀 발사 완료! 발사시각(서버추정)=${new Date(sentAt).toISOString().slice(11, 23)}` +
+          (tgt ? ` / 목표대비 ${sentAt - tgt}ms` : ''), 'ok');
+      }
+
+      /** 정밀 대기: 목표-offset-clockOffset 까지 (로컬 Date.now 기준 변환) → busy-wait 후 fire. */
+      function arm() {
+        const tgtServer = targetServerEpoch();
+        if (tgtServer == null) { errlog('목표 시간을 입력하세요.'); return; }
+        const offset = Number($('offset').value) || 0;
+        // 서버시간 기준 발사시각 → 로컬 Date.now 기준으로 환산 (로컬 = 서버 - clockOffset)
+        const fireServer = tgtServer - offset;
+        const fireLocal = fireServer - clockOffset;
+        if (fireLocal <= Date.now()) { errlog('발사 시각이 이미 지났습니다.'); return; }
+
+        // 팝업 차단 회피: 사용자 클릭(제스처) 시점에 새 창을 미리 연다.
+        responseWindow = window.open('', 'formlympicResponse');
+        if (responseWindow) {
+          try { responseWindow.document.write('<title>Formlympic 대기중...</title><p style="font-family:sans-serif">발사 대기 중입니다...</p>'); } catch (_) {}
+        } else {
+          errlog('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.');
+        }
+
+        $('btnArm').disabled = true;
+        $('btnCancel').disabled = false;
+        log(`예약: 목표(서버)=${new Date(tgtServer).toISOString().slice(11, 23)} offset=${offset}ms → 발사(로컬)=${new Date(fireLocal).toISOString().slice(11, 23)}`, 'ok');
+
+        startCountdown(tgtServer);
+
+        // 하이브리드 대기: 발사-30ms 까지 setTimeout, 이후 busy-wait
+        const coarse = fireLocal - 30;
+        const spin = () => {
+          while (Date.now() < fireLocal) { /* busy-wait: 밀리초 정밀 */ }
+          fire();
+          disarm();
+        };
+        const waitCoarse = () => {
+          if (Date.now() >= coarse) { spin(); return; }
+          fireTimer = setTimeout(waitCoarse, Math.min(fireLocal - Date.now(), 50));
+        };
+        waitCoarse();
+      }
+
+      function disarm() {
+        if (fireTimer) { clearTimeout(fireTimer); fireTimer = null; }
+        stopCountdown();
+        $('btnArm').disabled = false;
+        $('btnCancel').disabled = true;
+      }
+
+      $('btnArm').addEventListener('click', arm);
+      $('btnCancel').addEventListener('click', () => { disarm(); log('예약 취소됨', 'warn'); });
+      $('btnFireNow').addEventListener('click', () => {
+        responseWindow = window.open('', 'formlympicResponse');
+        fire();
+      });
+
+      // -------------------- 카운트다운 --------------------
+
+      function startCountdown(tgtServer) {
+        stopCountdown();
+        const upd = () => {
+          const remain = tgtServer - serverNow();
+          $('countdown').textContent = remain <= 0 ? 'T-0' : 'T-' + (remain / 1000).toFixed(2) + 's';
+        };
+        upd();
+        countdownTimer = setInterval(upd, 50);
+      }
+      function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
+
+      log('준비 완료. formResponse cURL을 붙여넣고 파싱하세요.', 'ok');
+    </script>
+  </body>
+</html>

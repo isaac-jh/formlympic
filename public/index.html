@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Formlympic · Google Form 선착순 자동 제출기</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>🏁 Formlympic</h1>
+      <p>Google Form 선착순 정밀 자동 제출기 — 네트워크 레벨 <code>formResponse</code> POST</p>
+    </header>
+
+    <main class="grid">
+      <!-- ============ (1) 폼 주소 + 직접 요청 버튼 ============ -->
+      <section class="card">
+        <h2>① 폼 주소 / 직접 요청</h2>
+
+        <label for="viewFormUrl">viewForm URL (GET · 토큰 수급)</label>
+        <div class="row">
+          <input id="viewFormUrl" type="text" placeholder="https://docs.google.com/forms/d/e/.../viewform" />
+          <button id="btnInspect" class="btn">토큰/필드 추출</button>
+        </div>
+
+        <label for="formResponseUrl">formResponse URL (POST · 실제 제출)</label>
+        <div class="row">
+          <input id="formResponseUrl" type="text" placeholder="https://docs.google.com/forms/d/e/.../formResponse" />
+          <button id="btnSubmitNow" class="btn btn-warn">즉시 제출</button>
+        </div>
+
+        <label for="cookie">로그인 쿠키 (선택 · 로그인 필수 폼이면 필요)</label>
+        <textarea id="cookie" rows="3" spellcheck="false" placeholder="브라우저 개발자도구 → Network → formResponse 요청의 Cookie 헤더 값을 그대로 붙여넣기"></textarea>
+        <p class="hint">⚠️ 쿠키는 민감 정보입니다. 공유/커밋 금지, 수명이 짧아 자주 갱신이 필요합니다.</p>
+
+        <div id="inspectResult" class="hint"></div>
+      </section>
+
+      <!-- ============ (2) 지연시간 측정 ============ -->
+      <section class="card">
+        <h2>② 서버 지연시간 (Latency)</h2>
+        <div class="row">
+          <button id="btnPingToggle" class="btn">주기적 측정 시작</button>
+          <span class="muted">viewForm URL 기준 1초마다 측정</span>
+        </div>
+        <div class="latency-board">
+          <div class="metric"><span class="metric-label">최소 RTT</span><span id="latMin" class="metric-value">-</span></div>
+          <div class="metric"><span class="metric-label">평균 RTT</span><span id="latAvg" class="metric-value">-</span></div>
+          <div class="metric"><span class="metric-label">추정 편도</span><span id="latOneWay" class="metric-value">-</span></div>
+        </div>
+        <button id="btnApplyOffset" class="btn btn-ghost">추정 편도값을 발사 offset 으로 적용</button>
+      </section>
+
+      <!-- ============ (3) 페이로드 템플릿 ============ -->
+      <section class="card">
+        <h2>③ 입력 데이터 템플릿 (JSON)</h2>
+        <p class="hint">key = <code>entry.123456789</code>, value = 제출값(복수 선택은 배열)</p>
+        <textarea id="payloadTemplate" rows="8" spellcheck="false"></textarea>
+        <div id="payloadError" class="error"></div>
+      </section>
+
+      <!-- ============ (4) 목표 시간 + 예약 발사 ============ -->
+      <section class="card">
+        <h2>④ 목표 시간 & 정밀 발사</h2>
+        <div class="row">
+          <label class="inline">날짜·시각<input id="targetDateTime" type="datetime-local" step="1" /></label>
+          <label class="inline">ms<input id="targetMs" type="number" min="0" max="999" value="0" style="width: 80px" /></label>
+        </div>
+        <div class="row">
+          <label class="inline">Latency offset(ms)<input id="latencyOffset" type="number" min="0" value="50" style="width: 100px" /></label>
+          <span id="countdown" class="countdown">--</span>
+        </div>
+        <div class="row">
+          <button id="btnSchedule" class="btn btn-primary">🚀 예약 발사 시작</button>
+          <button id="btnQuick" class="btn btn-ghost">+10초 후로 설정</button>
+        </div>
+      </section>
+
+      <!-- ============ (5) 로그 ============ -->
+      <section class="card card-wide">
+        <h2>⑤ 실행 로그</h2>
+        <pre id="log" class="log"></pre>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
