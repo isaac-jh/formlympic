@@ -431,7 +431,17 @@ function openResponseWindow(htmlBase64, finalUrl) {
         : baseTag + html;
     }
 
-    const blob = new Blob([html], {type: 'text/html'});
+    // blob: URL 은 HTTP 헤더가 없어 charset 이 전달되지 않는다.
+    // 브라우저가 레거시 인코딩으로 추측해 한글이 깨지므로, 문서 맨 앞에
+    // <meta charset="utf-8"> 를 강제 주입하고 Blob type 에도 charset 을 명시한다.
+    if (!/<meta\s+charset/i.test(html)) {
+      const metaTag = '<meta charset="utf-8">';
+      html = /<head[^>]*>/i.test(html)
+        ? html.replace(/<head[^>]*>/i, (m) => m + metaTag)
+        : metaTag + html;
+    }
+
+    const blob = new Blob([html], {type: 'text/html;charset=utf-8'});
     const url = URL.createObjectURL(blob);
     const win = window.open(url, '_blank');
     if (!win) {
