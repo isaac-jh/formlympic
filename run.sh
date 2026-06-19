@@ -7,7 +7,10 @@
 #    ./run.sh            # 빌드 후 백그라운드 실행
 #    PORT=8080 ./run.sh  # 호스트 포트 변경 (컨테이너 내부는 항상 3000)
 # ============================================================================
-set -euo pipefail
+set -eu
+# pipefail 은 bash/zsh 등 일부 셸에서만 지원됨(dash 미지원).
+# `sh run.sh` 처럼 dash 로 실행돼도 죽지 않도록, 지원될 때만 활성화한다.
+(set -o pipefail) 2>/dev/null && set -o pipefail || true
 
 # ---- 설정 (필요 시 환경변수로 덮어쓰기) ----
 IMAGE_NAME="${IMAGE_NAME:-formlympic}"
