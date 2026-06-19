@@ -19,6 +19,11 @@ function getCookie() {
 }
 
 const el = {
+  viewCurl: $('viewCurl'),
+  respCurl: $('respCurl'),
+  btnParseViewCurl: $('btnParseViewCurl'),
+  btnParseRespCurl: $('btnParseRespCurl'),
+  curlParseResult: $('curlParseResult'),
   viewFormUrl: $('viewFormUrl'),
   formResponseUrl: $('formResponseUrl'),
   cookie: $('cookie'),
@@ -419,6 +424,136 @@ function safeOrigin(u) {
     return null;
   }
 }
+
+// --------------------------------------------------------------------------
+// cURL 붙여넣기 → 자동 채우기
+// --------------------------------------------------------------------------
+
+/**
+ * 셸 토크나이저. 작은따옴표/큰따옴표/백슬래시/줄바꿈(\) 연속을 처리한다.
+ * 크롬 "Copy as cURL (bash)" 의 '\'' (이스케이프된 작은따옴표)도 올바르게 처리됨.
+ */
+function tokenizeCurl(s) {
+  s = s.replace(/\\\r?\n/g, ' ');
+  const tokens = [];
+  let i = 0;
+  const n = s.length;
+  while (i < n) {
+    while (i < n && /\s/.test(s[i])) i++;
+    if (i >= n) break;
+    let tok = '';
+    while (i < n && !/\s/.test(s[i])) {
+      const c = s[i];
+      if (c === "'") {
+        i++;
+        while (i < n && s[i] !== "'") { tok += s[i]; i++; }
+        i++;
+      } else if (c === '"') {
+        i++;
+        while (i < n && s[i] !== '"') {
+          if (s[i] === '\\' && i + 1 < n) { tok += s[i + 1]; i += 2; }
+          else { tok += s[i]; i++; }
+        }
+        i++;
+      } else if (c === '\\') {
+        if (i + 1 < n) { tok += s[i + 1]; i += 2; } else i++;
+      } else { tok += c; i++; }
+    }
+    tokens.push(tok);
+  }
+  return tokens;
+}
+
+/** cURL 문자열을 {url, method, body, headers, cookie} 로 파싱한다. */
+function parseCurl(text) {
+  const t = tokenizeCurl(text);
+  let url = null;
+  let method = null;
+  let cookie = null;
+  const data = [];
+  const headers = {};
+  const dataFlags = ['--data-raw', '--data', '-d', '--data-binary', '--data-ascii', '--data-urlencode'];
+  for (let i = 0; i < t.length; i++) {
+    const a = t[i];
+    if (a === 'curl') continue;
+    if (a === '-X' || a === '--request') { method = t[++i]; }
+    else if (a === '-H' || a === '--header') {
+      const h = t[++i] || '';
+      const idx = h.indexOf(':');
+      if (idx > 0) {
+        const k = h.slice(0, idx).trim().toLowerCase();
+        const v = h.slice(idx + 1).trim();
+        headers[k] = v;
+        if (k === 'cookie') cookie = v; // 헤더로 들어온 쿠키도 수집
+      }
+    } else if (a === '-b' || a === '--cookie') { cookie = t[++i]; }
+    else if (dataFlags.includes(a)) { data.push(t[++i]); }
+    else if (/^https?:\/\//.test(a) && !url) { url = a; }
+    else if (!a.startsWith('-') && !url) { url = a; }
+  }
+  const body = data.join('&');
+  if (!method) method = body ? 'POST' : 'GET';
+  return {url, method, body, headers, cookie};
+}
+
+/** 시스템/자동 주입 필드 (템플릿에서 제외). */
+const SYSTEM_FIELDS = new Set([
+  'fbzx', 'fvv', 'pageHistory', 'submissionTimestamp', 'dlut', 'partialResponse', 'hud',
+]);
+
+/**
+ * formResponse 본문(urlencoded)에서 entry.* 사용자 입력만 추출해 템플릿 객체로 변환.
+ *  - 복수 값(체크박스)은 배열로, _sentinel 등 보조 entry 필드는 그대로 유지.
+ *  - fbzx/타임스탬프 등 시스템 필드는 도구가 발사 시 자동 주입하므로 제외.
+ */
+function bodyToTemplate(body) {
+  const params = new URLSearchParams(body);
+  const out = {};
+  for (const key of new Set(params.keys())) {
+    if (SYSTEM_FIELDS.has(key)) continue;
+    const values = params.getAll(key);
+    out[key] = values.length > 1 ? values : values[0];
+  }
+  return out;
+}
+
+el.btnParseViewCurl.addEventListener('click', () => {
+  try {
+    const p = parseCurl(el.viewCurl.value);
+    if (!p.url) throw new Error('URL을 찾지 못했습니다.');
+    el.viewFormUrl.value = p.url;
+    if (p.cookie) el.cookie.value = p.cookie;
+    el.curlParseResult.textContent =
+      `viewForm 파싱 완료: ${p.url}` + (p.cookie ? ' / 쿠키 추출됨' : '');
+    logLine('viewForm cURL 파싱 → URL/쿠키 자동 채움', 'ok');
+  } catch (err) {
+    el.curlParseResult.textContent = '오류: ' + err.message;
+    logLine('viewForm cURL 파싱 오류: ' + err.message, 'err');
+  }
+});
+
+el.btnParseRespCurl.addEventListener('click', () => {
+  try {
+    const p = parseCurl(el.respCurl.value);
+    if (!p.url) throw new Error('URL을 찾지 못했습니다.');
+    el.formResponseUrl.value = p.url;
+    if (p.cookie) el.cookie.value = p.cookie;
+    const template = bodyToTemplate(p.body);
+    const entryCount = Object.keys(template).length;
+    if (entryCount > 0) el.payloadTemplate.value = JSON.stringify(template, null, 2);
+    const fbzx = new URLSearchParams(p.body).get('fbzx');
+    el.curlParseResult.textContent =
+      `formResponse 파싱 완료: ${p.url} / 필드 ${entryCount}개` +
+      (p.cookie ? ' / 쿠키 추출됨' : '') + (fbzx ? ' / fbzx는 발사 시 새로 수급' : '');
+    logLine(`formResponse cURL 파싱 → URL/쿠키/템플릿(${entryCount}개) 자동 채움`, 'ok');
+    if (new URLSearchParams(p.body).has('hud')) {
+      logLine('ℹ️ 본문의 hud 필드는 템플릿에서 제외했습니다(제출 거부 유발).', 'warn');
+    }
+  } catch (err) {
+    el.curlParseResult.textContent = '오류: ' + err.message;
+    logLine('formResponse cURL 파싱 오류: ' + err.message, 'err');
+  }
+});
 
 // 부팅
 loadDefaults();

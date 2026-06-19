@@ -13,6 +13,23 @@
     </header>
 
     <main class="grid">
+      <!-- ============ (0) cURL 붙여넣기 (자동 채우기) ============ -->
+      <section class="card card-wide">
+        <h2>⓪ cURL 붙여넣기 → 자동 채우기</h2>
+        <p class="hint">크롬 개발자도구에서 <code>Copy as cURL (bash)</code> 한 값을 붙여넣고 파싱하면 아래 URL·쿠키·데이터 템플릿이 자동으로 채워집니다.</p>
+        <label for="viewCurl">viewForm cURL (GET · URL/쿠키 추출)</label>
+        <div class="row">
+          <textarea id="viewCurl" rows="3" spellcheck="false" placeholder="curl 'https://docs.google.com/forms/.../viewform' -H ... -b '쿠키...'"></textarea>
+          <button id="btnParseViewCurl" class="btn">파싱</button>
+        </div>
+        <label for="respCurl">formResponse cURL (POST · URL/쿠키/필드 추출)</label>
+        <div class="row">
+          <textarea id="respCurl" rows="3" spellcheck="false" placeholder="curl 'https://docs.google.com/forms/.../formResponse' -H ... --data-raw 'entry...'"></textarea>
+          <button id="btnParseRespCurl" class="btn">파싱</button>
+        </div>
+        <div id="curlParseResult" class="hint"></div>
+      </section>
+
       <!-- ============ (1) 폼 주소 + 직접 요청 버튼 ============ -->
       <section class="card">
         <h2>① 폼 주소 / 직접 요청</h2>
